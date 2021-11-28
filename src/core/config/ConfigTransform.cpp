@@ -103,7 +103,9 @@ void xmrig::ConfigTransform::finalize(rapidjson::Document &doc)
         profile.AddMember(StringRef(kThreads),   m_threads, allocator);
         profile.AddMember(StringRef(kAffinity),  m_affinity, allocator);
 
+#       ifdef XMRIG_ALGO_KAWPOW
         doc[CpuConfig::kField].AddMember(StringRef(Algorithm::kKAWPOW), false, doc.GetAllocator());
+#       endif
         doc[CpuConfig::kField].AddMember(StringRef(kAsterisk), profile, doc.GetAllocator());
     }
 
@@ -267,6 +269,7 @@ void xmrig::ConfigTransform::transform(rapidjson::Document &doc, int key, const 
     case IConfig::BenchSeedKey:     /* --seed */
     case IConfig::BenchHashKey:     /* --hash */
     case IConfig::UserKey:          /* --user */
+    case IConfig::RotationKey:      /* --rotation */
         return transformBenchmark(doc, key, arg);
 #   endif
 
@@ -355,6 +358,9 @@ void xmrig::ConfigTransform::transformBenchmark(rapidjson::Document &doc, int ke
 
     case IConfig::UserKey: /* --user */
         return set(doc, BenchConfig::kBenchmark, BenchConfig::kUser, arg);
+
+    case IConfig::RotationKey: /* --rotation */
+        return set(doc, BenchConfig::kBenchmark, BenchConfig::kRotation, arg);
 
     default:
         break;

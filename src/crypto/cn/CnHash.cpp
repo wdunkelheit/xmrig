@@ -310,9 +310,26 @@ xmrig::CnHash::CnHash()
     m_map[Algorithm::ASTROBWT_DERO]->data[AV_SINGLE_SOFT][Assembly::NONE] = astrobwt::single_hash<Algorithm::ASTROBWT_DERO>;
 #   endif
 
+#   ifdef XMRIG_ALGO_GHOSTRIDER
+    ADD_FN(Algorithm::CN_GR_0);
+    ADD_FN(Algorithm::CN_GR_1);
+    ADD_FN(Algorithm::CN_GR_2);
+    ADD_FN(Algorithm::CN_GR_3);
+    ADD_FN(Algorithm::CN_GR_4);
+    ADD_FN(Algorithm::CN_GR_5);
+#   endif
+
 #   ifdef XMRIG_FEATURE_ASM
     patchAsmVariants();
 #   endif
+}
+
+
+xmrig::CnHash::~CnHash()
+{
+    for (auto const& x : m_map) {
+      delete m_map[x.first];
+    }
 }
 
 

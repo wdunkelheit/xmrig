@@ -36,6 +36,7 @@
 
 #include "base/io/log/Log.h"
 #include "base/io/log/Tags.h"
+#include "base/tools/Chrono.h"
 #include "backend/cpu/Cpu.h"
 #include "crypto/cn/CnHash.h"
 #include "crypto/cn/CnCtx.h"
@@ -44,7 +45,6 @@
 
 #include <thread>
 #include <atomic>
-#include <chrono>
 #include <uv.h>
 
 #ifdef XMRIG_FEATURE_HWLOC
@@ -166,7 +166,7 @@ static struct AlgoTune
 
 struct HelperThread
 {
-    HelperThread(hwloc_bitmap_t cpu_set, bool is8MB) : m_cpuSet(cpu_set), m_is8MB(is8MB)
+    HelperThread(hwloc_bitmap_t cpu_set, int priority, bool is8MB) : m_cpuSet(cpu_set), m_priority(priority), m_is8MB(is8MB)
     {
         uv_mutex_init(&m_mutex);
         uv_cond_init(&m_cond);
@@ -241,6 +241,8 @@ struct HelperThread
             }
         }
 
+        Platform::setThreadPriority(m_priority);
+
         uv_mutex_lock(&m_mutex);
         m_ready = true;
 
@@ -268,6 +270,7 @@ struct HelperThread
     volatile bool m_ready = false;
     volatile bool m_finished = false;
     hwloc_bitmap_t m_cpuSet = {};
+    int m_priority = -1;
     bool m_is8MB = false;
 
     std::thread* m_thread = nullptr;
@@ -290,13 +293,14 @@ void benchmark()
         hwloc_obj_t pu = hwloc_get_pu_obj_by_os_index(topology, thread_index1);
         hwloc_obj_t pu2;
         hwloc_get_closest_objs(topology, pu, &pu2, 1);
-        uint32_t thread_index2 = pu2->os_index;
+        uint32_t thread_index2 = pu2 ? pu2->os_index : thread_index1;
 
         if (thread_index2 < thread_index1) {
             std::swap(thread_index1, thread_index2);
         }
 
         Platform::setThreadAffinity(thread_index1);
+        Platform::setThreadPriority(3);
 
         constexpr uint32_t N = 1U << 21;
 
@@ -328,8 +332,6 @@ void benchmark()
         LOG_VERBOSE("%24s |  N  | Hashrate", "Algorithm");
         LOG_VERBOSE("-------------------------|-----|-------------");
 
-        using namespace std::chrono;
-
         for (uint32_t algo = 0; algo < 6; ++algo) {
             for (uint64_t step : { 1, 2, 4}) {
                 const size_t cur_scratchpad_size = cn_sizes[algo] * step;
@@ -339,26 +341,26 @@ void benchmark()
 
                 auto f = CnHash::fn(cn_hash[algo], av[step], Assembly::AUTO);
 
-                const high_resolution_clock::time_point start_time = high_resolution_clock::now();
+                double start_time = Chrono::highResolutionMSecs();
 
                 double min_dt = 1e10;
                 for (uint32_t iter = 0;; ++iter) {
-                    const high_resolution_clock::time_point t1 = high_resolution_clock::now();
+                    double t1 = Chrono::highResolutionMSecs();
 
                     // Stop after 15 milliseconds, but only if at least 10 iterations were done
-                    if ((iter >= 10) && (duration_cast<milliseconds>(t1 - start_time).count() >= 15)) {
+                    if ((iter >= 10) && (t1 - start_time >= 15.0)) {
                         break;
                     }
 
                     f(buf, sizeof(buf), hash, ctx, 0);
 
-                    const double dt = duration_cast<nanoseconds>(high_resolution_clock::now() - t1).count() / 1e9;
+                    const double dt = Chrono::highResolutionMSecs() - t1;
                     if (dt < min_dt) {
                         min_dt = dt;
                     }
                 }
 
-                const double hashrate = step / min_dt;
+                const double hashrate = step * 1e3 / min_dt;
                 LOG_VERBOSE("%24s | %" PRIu64 "x1 | %.2f h/s", cn_names[algo], step, hashrate);
 
                 if (hashrate > tune8MB[algo].hashrate) {
@@ -377,7 +379,7 @@ void benchmark()
 
         hwloc_bitmap_t helper_set = hwloc_bitmap_alloc();
         hwloc_bitmap_set(helper_set, thread_index2);
-        HelperThread* helper = new HelperThread(helper_set, false);
+        HelperThread* helper = new HelperThread(helper_set, 3, false);
 
         for (uint32_t algo = 0; algo < 6; ++algo) {
             for (uint64_t step : { 1, 2, 4}) {
@@ -388,14 +390,14 @@ void benchmark()
 
                 auto f = CnHash::fn(cn_hash[algo], av[step], Assembly::AUTO);
 
-                const high_resolution_clock::time_point start_time = high_resolution_clock::now();
+                double start_time = Chrono::highResolutionMSecs();
 
                 double min_dt = 1e10;
                 for (uint32_t iter = 0;; ++iter) {
-                    const high_resolution_clock::time_point t1 = high_resolution_clock::now();
+                    double t1 = Chrono::highResolutionMSecs();
 
                     // Stop after 30 milliseconds, but only if at least 10 iterations were done
-                    if ((iter >= 10) && (duration_cast<milliseconds>(t1 - start_time).count() >= 30)) {
+                    if ((iter >= 10) && (t1 - start_time >= 30.0)) {
                         break;
                     }
 
@@ -403,13 +405,13 @@ void benchmark()
                     f(buf, sizeof(buf), hash, ctx, 0);
                     helper->wait();
 
-                    const double dt = duration_cast<nanoseconds>(high_resolution_clock::now() - t1).count() / 1e9;
+                    const double dt = Chrono::highResolutionMSecs() - t1;
                     if (dt < min_dt) {
                         min_dt = dt;
                     }
                 }
 
-                const double hashrate = step * 2.0 / min_dt * 1.0075;
+                const double hashrate = step * 2e3 / min_dt * 1.0075;
                 LOG_VERBOSE("%24s | %" PRIu64 "x2 | %.2f h/s", cn_names[algo], step, hashrate);
 
                 if (hashrate > tune8MB[algo].hashrate) {
@@ -467,7 +469,7 @@ static inline bool findByType(hwloc_obj_t obj, hwloc_obj_type_t type, func lambd
 }
 
 
-HelperThread* create_helper_thread(int64_t cpu_index, const std::vector<int64_t>& affinities)
+HelperThread* create_helper_thread(int64_t cpu_index, int priority, const std::vector<int64_t>& affinities)
 {
 #ifndef XMRIG_ARM
     hwloc_bitmap_t helper_cpu_set = hwloc_bitmap_alloc();
@@ -522,7 +524,7 @@ HelperThread* create_helper_thread(int64_t cpu_index, const std::vector<int64_t>
             });
 
             if (hwloc_bitmap_weight(helper_cpu_set) > 0) {
-                return new HelperThread(helper_cpu_set, is8MB);
+                return new HelperThread(helper_cpu_set, priority, is8MB);
             }
         }
     }
@@ -538,7 +540,7 @@ void destroy_helper_thread(HelperThread* t)
 }
 
 
-void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ctx** ctx, HelperThread* helper)
+void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ctx** ctx, HelperThread* helper, bool verbose)
 {
     enum { N = 8 };
 
@@ -554,11 +556,13 @@ void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ct
     uint32_t cn_indices[6];
     select_indices(cn_indices, data + 4);
 
-    static uint32_t prev_indices[3];
-    if (memcmp(cn_indices, prev_indices, sizeof(prev_indices)) != 0) {
-        memcpy(prev_indices, cn_indices, sizeof(prev_indices));
-        for (int i = 0; i < 3; ++i) {
-            LOG_INFO("%s GhostRider algo %d: %s", Tags::cpu(), i + 1, cn_names[cn_indices[i]]);
+    if (verbose) {
+        static uint32_t prev_indices[3];
+        if (memcmp(cn_indices, prev_indices, sizeof(prev_indices)) != 0) {
+            memcpy(prev_indices, cn_indices, sizeof(prev_indices));
+            for (int i = 0; i < 3; ++i) {
+                LOG_INFO("%s GhostRider algo %d: %s", Tags::cpu(), i + 1, cn_names[cn_indices[i]]);
+            }
         }
     }
 
@@ -761,11 +765,11 @@ void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ct
 
 
 void benchmark() {}
-HelperThread* create_helper_thread(int64_t, const std::vector<int64_t>&) { return nullptr; }
+HelperThread* create_helper_thread(int64_t, int, const std::vector<int64_t>&) { return nullptr; }
 void destroy_helper_thread(HelperThread*) {}
 
 
-void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ctx** ctx, HelperThread*)
+void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ctx** ctx, HelperThread*, bool verbose)
 {
     constexpr uint32_t N = 8;
 
@@ -784,11 +788,13 @@ void hash_octa(const uint8_t* data, size_t size, uint8_t* output, cryptonight_ct
     uint32_t step[6] = { 4, 4, 1, 2, 4, 4 };
 #endif
 
-    static uint32_t prev_indices[3];
-    if (memcmp(cn_indices, prev_indices, sizeof(prev_indices)) != 0) {
-        memcpy(prev_indices, cn_indices, sizeof(prev_indices));
-        for (int i = 0; i < 3; ++i) {
-            LOG_INFO("%s GhostRider algo %d: %s", Tags::cpu(), i + 1, cn_names[cn_indices[i]]);
+    if (verbose) {
+        static uint32_t prev_indices[3];
+        if (memcmp(cn_indices, prev_indices, sizeof(prev_indices)) != 0) {
+            memcpy(prev_indices, cn_indices, sizeof(prev_indices));
+            for (int i = 0; i < 3; ++i) {
+                LOG_INFO("%s GhostRider algo %d: %s", Tags::cpu(), i + 1, cn_names[cn_indices[i]]);
+            }
         }
     }
 

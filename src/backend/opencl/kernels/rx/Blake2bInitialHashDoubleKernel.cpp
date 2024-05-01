@@ -5,8 +5,8 @@
  * Copyright 2014-2016 Wolf9466    <https://github.com/OhGodAPet>
  * Copyright 2016      Jay D Dee   <jayddee246@gmail.com>
  * Copyright 2017-2018 XMR-Stak    <https://github.com/fireice-uk>, <https://github.com/psychocrypt>
- * Copyright 2018-2020 SChernykh   <https://github.com/SChernykh>
- * Copyright 2016-2020 XMRig       <https://github.com/xmrig>, <support@xmrig.com>
+ * Copyright 2018-2019 SChernykh   <https://github.com/SChernykh>
+ * Copyright 2016-2019 XMRig       <https://github.com/xmrig>, <support@xmrig.com>
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -22,38 +22,37 @@
  *   along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef XMRIG_CUDAASTROBWTRUNNER_H
-#define XMRIG_CUDAASTROBWTRUNNER_H
+
+#include "backend/opencl/kernels/rx/Blake2bInitialHashDoubleKernel.h"
+#include "backend/opencl/wrappers/OclLib.h"
 
 
-#include "backend/cuda/runners/CudaBaseRunner.h"
-
-
-namespace xmrig {
-
-
-class CudaAstroBWTRunner : public CudaBaseRunner
+void xmrig::Blake2bInitialHashDoubleKernel::enqueue(cl_command_queue queue, size_t threads)
 {
-public:
-    static constexpr uint32_t BWT_DATA_MAX_SIZE = 560 * 1024 - 256;
-    static constexpr uint32_t BWT_DATA_STRIDE = (BWT_DATA_MAX_SIZE + 256 + 255) & ~255U;
+    const size_t gthreads        = threads;
+    static const size_t lthreads = 64;
 
-    CudaAstroBWTRunner(size_t index, const CudaLaunchData &data);
-
-protected:
-    inline size_t intensity() const override { return m_intensity; }
-    inline size_t roundSize() const override;
-    inline size_t processedHashes() const override;
-
-    bool run(uint32_t startNonce, uint32_t *rescount, uint32_t *resnonce) override;
-    bool set(const Job &job, uint8_t *blob) override;
-
-private:
-    size_t m_intensity  = 0;
-};
+    enqueueNDRange(queue, 1, nullptr, &gthreads, &lthreads);
+}
 
 
-} /* namespace xmrig */
+// __kernel void blake2b_initial_hash_double(__global void *out, __global const void* blockTemplate, uint blockTemplateSize, uint start_nonce)
+void xmrig::Blake2bInitialHashDoubleKernel::setArgs(cl_mem out, cl_mem blockTemplate)
+{
+    setArg(0, sizeof(cl_mem), &out);
+    setArg(1, sizeof(cl_mem), &blockTemplate);
+}
 
 
-#endif // XMRIG_CUDAASTROBWTRUNNER_H
+void xmrig::Blake2bInitialHashDoubleKernel::setBlobSize(size_t size)
+{
+    const uint32_t s = size;
+
+    setArg(2, sizeof(uint32_t), &s);
+}
+
+
+void xmrig::Blake2bInitialHashDoubleKernel::setNonce(uint32_t nonce)
+{
+    setArg(3, sizeof(uint32_t), &nonce);
+}

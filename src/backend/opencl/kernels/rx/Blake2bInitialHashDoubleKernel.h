@@ -5,8 +5,8 @@
  * Copyright 2014-2016 Wolf9466    <https://github.com/OhGodAPet>
  * Copyright 2016      Jay D Dee   <jayddee246@gmail.com>
  * Copyright 2017-2018 XMR-Stak    <https://github.com/fireice-uk>, <https://github.com/psychocrypt>
- * Copyright 2018-2020 SChernykh   <https://github.com/SChernykh>
- * Copyright 2016-2020 XMRig       <https://github.com/xmrig>, <support@xmrig.com>
+ * Copyright 2018-2019 SChernykh   <https://github.com/SChernykh>
+ * Copyright 2016-2019 XMRig       <https://github.com/xmrig>, <support@xmrig.com>
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -22,23 +22,29 @@
  *   along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef XMRIG_BLAKE2BINITIALHASHDOUBLEKERNEL_H
+#define XMRIG_BLAKE2BINITIALHASHDOUBLEKERNEL_H
 
-#include "backend/opencl/kernels/astrobwt/AstroBWT_SHA3Kernel.h"
-#include "backend/opencl/wrappers/OclLib.h"
+
+#include "backend/opencl/wrappers/OclKernel.h"
 
 
-void xmrig::AstroBWT_SHA3Kernel::enqueue(cl_command_queue queue, size_t threads)
+namespace xmrig {
+
+
+class Blake2bInitialHashDoubleKernel : public OclKernel
 {
-    const size_t workgroup_size = 32;
-    const size_t gthreads       = threads * workgroup_size;
-    enqueueNDRange(queue, 1, nullptr, &gthreads, &workgroup_size);
-}
+public:
+    inline Blake2bInitialHashDoubleKernel(cl_program program) : OclKernel(program, "blake2b_initial_hash_double") {}
+
+    void enqueue(cl_command_queue queue, size_t threads);
+    void setArgs(cl_mem out, cl_mem blockTemplate);
+    void setBlobSize(size_t size);
+    void setNonce(uint32_t nonce);
+};
 
 
-void xmrig::AstroBWT_SHA3Kernel::setArgs(cl_mem inputs, cl_mem input_sizes, uint32_t input_stride, cl_mem output_salsa20_keys)
-{
-    setArg(0, sizeof(cl_mem), &inputs);
-    setArg(1, sizeof(cl_mem), &input_sizes);
-    setArg(2, sizeof(uint32_t), &input_stride);
-    setArg(3, sizeof(cl_mem), &output_salsa20_keys);
-}
+} // namespace xmrig
+
+
+#endif /* XMRIG_BLAKE2BINITIALHASHDOUBLEKERNEL_H */

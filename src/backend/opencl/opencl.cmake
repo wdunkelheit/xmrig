@@ -80,6 +80,7 @@ if (WITH_OPENCL)
     if (WITH_RANDOMX)
         list(APPEND HEADERS_BACKEND_OPENCL
              src/backend/opencl/kernels/rx/Blake2bHashRegistersKernel.h
+             src/backend/opencl/kernels/rx/Blake2bInitialHashDoubleKernel.h
              src/backend/opencl/kernels/rx/Blake2bInitialHashKernel.h
              src/backend/opencl/kernels/rx/ExecuteVmKernel.h
              src/backend/opencl/kernels/rx/FillAesKernel.h
@@ -96,6 +97,7 @@ if (WITH_OPENCL)
         list(APPEND SOURCES_BACKEND_OPENCL
              src/backend/opencl/generators/ocl_generic_rx_generator.cpp
              src/backend/opencl/kernels/rx/Blake2bHashRegistersKernel.cpp
+             src/backend/opencl/kernels/rx/Blake2bInitialHashDoubleKernel.cpp
              src/backend/opencl/kernels/rx/Blake2bInitialHashKernel.cpp
              src/backend/opencl/kernels/rx/ExecuteVmKernel.cpp
              src/backend/opencl/kernels/rx/FillAesKernel.cpp
@@ -107,31 +109,6 @@ if (WITH_OPENCL)
              src/backend/opencl/runners/OclRxBaseRunner.cpp
              src/backend/opencl/runners/OclRxJitRunner.cpp
              src/backend/opencl/runners/OclRxVmRunner.cpp
-             )
-    endif()
-
-    if (WITH_ASTROBWT)
-        list(APPEND HEADERS_BACKEND_OPENCL
-             src/backend/opencl/kernels/astrobwt/AstroBWT_FilterKernel.h
-             src/backend/opencl/kernels/astrobwt/AstroBWT_FindSharesKernel.h
-             src/backend/opencl/kernels/astrobwt/AstroBWT_MainKernel.h
-             src/backend/opencl/kernels/astrobwt/AstroBWT_PrepareBatch2Kernel.h
-             src/backend/opencl/kernels/astrobwt/AstroBWT_Salsa20Kernel.h
-             src/backend/opencl/kernels/astrobwt/AstroBWT_SHA3InitialKernel.h
-             src/backend/opencl/kernels/astrobwt/AstroBWT_SHA3Kernel.h
-             src/backend/opencl/runners/OclAstroBWTRunner.h
-             )
-
-        list(APPEND SOURCES_BACKEND_OPENCL
-             src/backend/opencl/generators/ocl_generic_astrobwt_generator.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_FilterKernel.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_FindSharesKernel.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_MainKernel.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_PrepareBatch2Kernel.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_Salsa20Kernel.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_SHA3InitialKernel.cpp
-             src/backend/opencl/kernels/astrobwt/AstroBWT_SHA3Kernel.cpp
-             src/backend/opencl/runners/OclAstroBWTRunner.cpp
              )
     endif()
 
